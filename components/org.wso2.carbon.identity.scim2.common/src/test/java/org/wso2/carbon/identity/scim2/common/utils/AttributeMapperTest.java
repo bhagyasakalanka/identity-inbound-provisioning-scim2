@@ -18,6 +18,7 @@
 
 package org.wso2.carbon.identity.scim2.common.utils;
 
+import org.powermock.modules.testng.PowerMockTestCase;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -33,7 +34,7 @@ import static org.mockito.MockitoAnnotations.initMocks;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
 
-public class AttributeMapperTest {
+public class AttributeMapperTest extends PowerMockTestCase {
 
     @BeforeMethod
     public void setUp() throws Exception {
@@ -61,7 +62,7 @@ public class AttributeMapperTest {
                 "\"locality\":\"Hollywood\",\"region\":\"CA\",\"postalCode\":\"91608\",\"country\":\"USA\"," +
                 "\"formatted\":\"456HollywoodBlvd\\nHollywood,CA91608USA\"}]," +
                 "\"phoneNumbers\":[{\"value\":\"555-555-5555\",\"type\":\"work\"},{\"value\":\"555-555-4444\"," +
-                "\"type\":\"mobile\"}]}";
+                "\"type\":\"mobile\"}],\"password\":\"12345\"}";
 
         JSONDecoder decoder = new JSONDecoder();
         SCIMResourceTypeSchema schema = SCIMResourceSchemaManager.getInstance().getUserResourceSchema();

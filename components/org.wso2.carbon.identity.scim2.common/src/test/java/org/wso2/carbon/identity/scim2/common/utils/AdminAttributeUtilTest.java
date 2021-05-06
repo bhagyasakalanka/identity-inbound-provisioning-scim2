@@ -18,8 +18,8 @@
 
 package org.wso2.carbon.identity.scim2.common.utils;
 
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.testng.PowerMockTestCase;
 import org.testng.annotations.BeforeMethod;
@@ -35,31 +35,37 @@ import org.wso2.carbon.user.api.RealmConfiguration;
 import org.wso2.carbon.user.api.UserRealm;
 import org.wso2.carbon.user.api.UserStoreException;
 import org.wso2.carbon.user.core.UserStoreManager;
+import org.wso2.carbon.user.core.common.AbstractUserStoreManager;
 import org.wso2.carbon.user.core.service.RealmService;
-import org.wso2.carbon.user.core.util.UserCoreUtil;
-import org.wso2.charon3.core.schema.SCIMConstants;
+import org.wso2.carbon.user.core.tenant.TenantManager;
 
+import java.sql.SQLException;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
+import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.anyObject;
+import static org.mockito.Matchers.anyMapOf;
 import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.MockitoAnnotations.initMocks;
+import static org.powermock.api.mockito.PowerMockito.doAnswer;
 import static org.powermock.api.mockito.PowerMockito.mockStatic;
 import static org.powermock.api.mockito.PowerMockito.when;
 import static org.powermock.api.mockito.PowerMockito.whenNew;
-import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNull;
 
-@PrepareForTest({SCIMCommonComponentHolder.class, ClaimsMgtUtil.class, IdentityTenantUtil.class, UserCoreUtil.class,
+@PrepareForTest({SCIMCommonComponentHolder.class, ClaimsMgtUtil.class, IdentityTenantUtil.class,
         IdentityUtil.class, SCIMCommonUtils.class, AdminAttributeUtil.class})
 public class AdminAttributeUtilTest extends PowerMockTestCase {
 
-    @Mock
-    RealmService realmService;
+    private static final List<Integer> INVALID_TENANT_IDS = Arrays.asList(-1, -2, -3);
 
     @Mock
-    RealmConfiguration realmConfiguration;
+    RealmService realmService;
 
     @Mock
     UserRealm userRealm;
@@ -68,121 +74,154 @@ public class AdminAttributeUtilTest extends PowerMockTestCase {
     UserStoreManager userStoreManager;
 
     @Mock
+    AbstractUserStoreManager abstractUserStoreManager;
+
+    @Mock
     SCIMGroupHandler scimGroupHandler;
 
-    AdminAttributeUtil adminAttributeUtil;
+    @Mock
+    TenantManager tenantManager;
 
     @BeforeMethod
     public void setUp() throws Exception {
-        adminAttributeUtil = new AdminAttributeUtil();
-    }
 
-    @DataProvider(name = "testUpdateAdminUserData")
-    public Object[][] testUpdateAdminUserData() {
-        return new Object[][]{
-                {true},
-                {false}
-        };
-    }
-
-    @Test(dataProvider = "testUpdateAdminUserData")
-    public void testUpdateAdminUser(boolean validateSCIMID) throws Exception {
-        String adminUsername = "admin";
-
+        initMocks(this);
         mockStatic(SCIMCommonComponentHolder.class);
         mockStatic(ClaimsMgtUtil.class);
         mockStatic(IdentityTenantUtil.class);
-        when(SCIMCommonComponentHolder.getRealmService()).thenReturn(realmService);
-        when(realmService.getTenantUserRealm(anyInt())).thenReturn(userRealm);
-        when(userRealm.getUserStoreManager()).thenReturn(userStoreManager);
-        when(userStoreManager.isSCIMEnabled()).thenReturn(true);
-        when(ClaimsMgtUtil.getAdminUserNameFromTenantId(eq(realmService), anyInt())).thenReturn(adminUsername);
-        when(IdentityTenantUtil.getRealmService()).thenReturn(realmService);
-        when(userStoreManager.getUserClaimValue(anyString(), anyString(), anyString())).thenReturn("");
-
-        ArgumentCaptor<Map> argument = ArgumentCaptor.forClass(Map.class);
-        adminAttributeUtil.updateAdminUser(1, validateSCIMID);
-        verify(userStoreManager).setUserClaimValues(anyString(), argument.capture(), anyString());
-    }
-
-    @Test(expectedExceptions = UserStoreException.class)
-    public void testUpdateAdminUser1() throws Exception {
-        mockStatic(SCIMCommonComponentHolder.class);
-        mockStatic(ClaimsMgtUtil.class);
-        mockStatic(IdentityTenantUtil.class);
-        when(SCIMCommonComponentHolder.getRealmService()).thenReturn(realmService);
-        when(realmService.getTenantUserRealm(anyInt())).thenReturn(userRealm);
-        when(userRealm.getUserStoreManager()).thenReturn(userStoreManager);
-        when(userStoreManager.isSCIMEnabled()).thenThrow(new UserStoreException());
-
-        adminAttributeUtil.updateAdminUser(1, true);
-        verify(userStoreManager.isSCIMEnabled());
-    }
-
-    @DataProvider(name = "testUpdateAdminGroupData")
-    public Object[][] testUpdateAdminGroupData() {
-        return new Object[][]{
-                {"testDomain"},
-                {null}
-        };
-    }
-
-    @Test(dataProvider = "testUpdateAdminGroupData")
-    public void testUpdateAdminGroup(String domainName) throws Exception {
-        String roleNameWithDomain = "TESTDOMAIN/admin";
-
-        mockStatic(SCIMCommonComponentHolder.class);
-        mockStatic(ClaimsMgtUtil.class);
-        mockStatic(IdentityTenantUtil.class);
-        mockStatic(UserCoreUtil.class);
-        mockStatic(IdentityUtil.class);
         mockStatic(SCIMCommonUtils.class);
         when(SCIMCommonComponentHolder.getRealmService()).thenReturn(realmService);
         when(realmService.getTenantUserRealm(anyInt())).thenReturn(userRealm);
-        when(userRealm.getUserStoreManager()).thenReturn(userStoreManager);
-        when(userStoreManager.isSCIMEnabled()).thenReturn(true);
-        when(userStoreManager.getTenantId()).thenReturn(1);
-        when(userStoreManager.getRealmConfiguration()).thenReturn(realmConfiguration);
-        when(realmConfiguration.getAdminRoleName()).thenReturn("admin");
-        when(UserCoreUtil.getDomainName((RealmConfiguration) anyObject())).thenReturn(domainName);
-        when(IdentityUtil.getPrimaryDomainName()).thenReturn("TESTDOMAIN");
-        when(UserCoreUtil.addDomainToName(anyString(), anyString())).thenReturn(roleNameWithDomain);
-        when(SCIMCommonUtils.getGroupNameWithDomain(anyString())).thenReturn(roleNameWithDomain);
-        whenNew(SCIMGroupHandler.class).withAnyArguments().thenReturn(scimGroupHandler);
-
-        ArgumentCaptor<String> argument = ArgumentCaptor.forClass(String.class);
-        adminAttributeUtil.updateAdminGroup(1);
-        verify(scimGroupHandler).addMandatoryAttributes(argument.capture());
-
-        assertEquals(argument.getValue(), roleNameWithDomain);
+        when(realmService.getTenantManager()).thenReturn(tenantManager);
+        when(ClaimsMgtUtil.getAdminUserNameFromTenantId(any(RealmService.class), anyInt())).
+                thenAnswer(invocationOnMock -> {
+            int tenantIdArg = invocationOnMock.getArgumentAt(1, Integer.class);
+            if (tenantIdArg == -1234) {
+                return "Boostrap Admin";
+            }
+            if (INVALID_TENANT_IDS.contains(tenantIdArg)) {
+                String msg = "Unable to retrieve the admin name for the tenant with the tenant Id: " + tenantIdArg;
+                throw new Exception(msg, new UserStoreException());
+            }
+            return "admin";
+        });
     }
 
-    @Test(expectedExceptions = IdentitySCIMException.class)
-    public void testUpdateAdminGroup1() throws Exception {
-        String roleNameWithDomain = "TESTDOMAIN/admin";
+    @DataProvider(name = "dataProviderForUpdateAdminUserData")
+    public Object[][] dataProviderForUpdateAdminUserData() {
 
-        mockStatic(SCIMCommonComponentHolder.class);
-        mockStatic(ClaimsMgtUtil.class);
-        mockStatic(IdentityTenantUtil.class);
-        mockStatic(UserCoreUtil.class);
+        return new Object[][]{
+                {1, false, true, "scimId", 0},
+                {1, true, false, "scimId", 1},
+                {1, true, true, "", 1},
+                {1, true, true, "scimId", 0},
+                {-1234, true, true, "scimId", 0},
+                {-1, true, true, "scimId", 0},
+        };
+    }
+
+    @Test(dataProvider = "dataProviderForUpdateAdminUserData")
+    public void testUpdateAdminUser(int tenantId, boolean isSCIMEnabled, boolean validateSCIMID, String scimID,
+                                    int times) throws Exception {
+
+        when(userRealm.getUserStoreManager()).thenReturn(userStoreManager);
+        when(userStoreManager.isSCIMEnabled()).thenReturn(isSCIMEnabled);
+        when(userStoreManager.getUserClaimValue(anyString(), anyString(), anyString())).thenReturn(scimID);
+        doAnswer(invocationOnMock -> null).when(userStoreManager).setUserClaimValues(anyString(),
+                anyMapOf(String.class, String.class), anyString());
+        AdminAttributeUtil.updateAdminUser(tenantId, validateSCIMID);
+        verify(userStoreManager, times(times)).setUserClaimValues(anyString(), anyMapOf(String.class, String.class),
+                anyString());
+    }
+
+    @DataProvider(name = "dataProviderForUpdateAdminGroup")
+    public Object[][] dataProviderForUpdateAdminGroup() {
+
+        RealmConfiguration realmConfiguration = new RealmConfiguration();
+        Map<String, String> userStoreProperties = new HashMap<>();
+        userStoreProperties.put("DomainName", "carbon");
+        realmConfiguration.setAdminRoleName("admin");
+        realmConfiguration.setUserStoreProperties(userStoreProperties);
+        RealmConfiguration realmConfigurationNoDomainName = new RealmConfiguration();
+        Map<String, String> userStorePropertiesDomainName = new HashMap<>();
+        userStoreProperties.put("InvalidDomainName", "carbon2");
+        realmConfigurationNoDomainName.setUserStoreProperties(userStorePropertiesDomainName);
+        realmConfigurationNoDomainName.setAdminRoleName("admin");
+        return new Object[][]{
+                {true, true, true, true, 1, realmConfiguration, 0},
+                {true, true, true, false, 1, realmConfiguration, 0},
+                {true, true, false, true, 1, realmConfiguration, 2},
+                {true, true, false, false, 1, realmConfiguration, 1},
+                {true, false, true, true, 1, realmConfigurationNoDomainName, 0},
+                {true, false, true, false, 1, realmConfigurationNoDomainName, 0},
+                {true, false, false, true, 1, realmConfigurationNoDomainName, 1},
+                {true, false, false, false, 1, realmConfigurationNoDomainName, 1},
+                {false, true, false, true, 1, realmConfigurationNoDomainName, 0},
+        };
+    }
+
+    @Test(dataProvider = "dataProviderForUpdateAdminGroup")
+    public void testUpdateAdminGroup(boolean isSCIMEnabled, boolean isSeparationEnabled, boolean isGroupExisting,
+                                     boolean isExistingRoleId, int tenantId, Object realmConfiguration, int times)
+            throws Exception {
+
         mockStatic(IdentityUtil.class);
-        mockStatic(SCIMCommonUtils.class);
-        when(SCIMCommonComponentHolder.getRealmService()).thenReturn(realmService);
-        when(realmService.getTenantUserRealm(anyInt())).thenReturn(userRealm);
-        when(userRealm.getUserStoreManager()).thenReturn(userStoreManager);
-        when(userStoreManager.isSCIMEnabled()).thenReturn(true);
-        when(userStoreManager.getTenantId()).thenReturn(1);
-        when(userStoreManager.getRealmConfiguration()).thenReturn(realmConfiguration);
-        when(realmConfiguration.getAdminRoleName()).thenReturn("admin");
-        when(UserCoreUtil.getDomainName((RealmConfiguration) anyObject())).thenReturn("testDomain");
-        when(IdentityUtil.getPrimaryDomainName()).thenReturn("TESTDOMAIN");
-        when(UserCoreUtil.addDomainToName(anyString(), anyString())).thenReturn(roleNameWithDomain);
-        when(SCIMCommonUtils.getGroupNameWithDomain(anyString())).thenReturn(roleNameWithDomain);
+        when(userRealm.getUserStoreManager()).thenReturn(abstractUserStoreManager);
+        when(abstractUserStoreManager.isSCIMEnabled()).thenReturn(isSCIMEnabled);
+        when(abstractUserStoreManager.getTenantId()).thenReturn(tenantId);
         whenNew(SCIMGroupHandler.class).withAnyArguments().thenReturn(scimGroupHandler);
-        when(scimGroupHandler.isGroupExisting(anyString())).thenThrow(new IdentitySCIMException("testException"));
-
-        adminAttributeUtil.updateAdminGroup(1);
-        verify(scimGroupHandler.isGroupExisting(anyString()));
+        when(scimGroupHandler.isGroupExisting(anyString())).thenReturn(isGroupExisting);
+        when(abstractUserStoreManager.isRoleAndGroupSeparationEnabled()).thenReturn(isSeparationEnabled);
+        when(abstractUserStoreManager.isExistingRole(anyString())).thenReturn(isExistingRoleId);
+        doAnswer(invocationOnMock -> null).when(scimGroupHandler).addMandatoryAttributes(anyString());
+        when(abstractUserStoreManager.getRealmConfiguration()).thenReturn((RealmConfiguration) realmConfiguration);
+        when(IdentityUtil.getPrimaryDomainName()).thenReturn("PRIMARY");
+        AdminAttributeUtil.updateAdminGroup(tenantId);
+        verify(scimGroupHandler, Mockito.times(times)).addMandatoryAttributes(anyString());
     }
 
+    @DataProvider(name = "dataProviderForUpdateAdminGroupThrowingError")
+    public Object[][] dataProviderForUpdateAdminGroupThrowingError() {
+
+        RealmConfiguration realmConfiguration = new RealmConfiguration();
+        Map<String, String> userStoreProperties = new HashMap<>();
+        userStoreProperties.put("DomainName", "carbon");
+        realmConfiguration.setAdminRoleName("admin");
+        realmConfiguration.setUserStoreProperties(userStoreProperties);
+        return new Object[][]{
+                {true, true, realmConfiguration},
+                {false, true, realmConfiguration},
+                {false, false, realmConfiguration},
+        };
+    }
+
+    @Test(dataProvider = "dataProviderForUpdateAdminGroupThrowingError")
+    public void testProviderForUpdateAdminGroupThrowingError(boolean isUserStoreManagerError,
+                                                             boolean isSCIMEnabledError, Object realmConfiguration)
+            throws Exception {
+
+        mockStatic(IdentityUtil.class);
+        when(userRealm.getUserStoreManager()).thenAnswer(invocationOnMock -> {
+            if (isUserStoreManagerError) {
+                throw new UserStoreException();
+            }
+            return abstractUserStoreManager;
+        });
+        when(abstractUserStoreManager.isSCIMEnabled()).thenAnswer(invocationOnMock -> {
+            if (isSCIMEnabledError) {
+                throw new UserStoreException();
+            }
+            return true;
+        });
+        when(abstractUserStoreManager.getTenantId()).thenReturn(1);
+        whenNew(SCIMGroupHandler.class).withAnyArguments().thenReturn(scimGroupHandler);
+        when(scimGroupHandler.isGroupExisting(anyString())).
+                thenThrow(new IdentitySCIMException(
+                        "Error when reading the group information from the persistence store.",
+                        new SQLException()));
+        when(abstractUserStoreManager.getRealmConfiguration()).thenReturn((RealmConfiguration) realmConfiguration);
+        when(IdentityUtil.getPrimaryDomainName()).thenReturn("PRIMARY");
+        AdminAttributeUtil.updateAdminGroup(1);
+        assertNull(null);
+    }
 }
